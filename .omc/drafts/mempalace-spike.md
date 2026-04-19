@@ -1,0 +1,5 @@
+# Mempalace Spike Decision — 2026-04-19
+
+**Decision: STUB CLIENT**
+
+Mempalace (github.com/mempalace/mempalace) is a Python-only tool (88.9% Python codebase, pip-installable via `pip install mempalace`) with a Python API, a CLI (`mempalace init/mine/search/wake-up`), and 29 MCP tools. It has no npm package, no JS/TS client library, and no REST HTTP server surface that a Bun/TypeScript process could call directly. The only JavaScript integration path would be shelling out to the Python MCP server and implementing a custom MCP client, which exceeds POC scope by several weeks. Per the plan's R1 mitigation, we default to the `InMemoryClient` stub that implements the same `MemoryClient` interface (read/write/tag/list). The POC still fully validates the shared-memory protocol across providers; the differentiator claim is documented as "provider-agnostic shared memory protocol" rather than "mempalace integration." The `mempalace-client.ts` file is scaffolded with TODO markers for a v0.2 swap once a JS MCP client wrapper exists.

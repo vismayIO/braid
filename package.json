@@ -1,0 +1,49 @@
+{
+  "name": "braid",
+  "version": "0.1.0",
+  "description": "Multi-provider AI agent orchestrator that dispatches one task to Codex, Gemini, and Ollama in parallel, shares context through a memory layer, and merges their outputs.",
+  "type": "module",
+  "bin": {
+    "braid": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "bun build src/cli.ts --outdir dist --target bun",
+    "test": "bun test",
+    "test:unit": "bun test src/**/*.test.ts",
+    "test:integration": "bun test tests/integration/*.test.ts",
+    "test:e2e": "RUN_E2E=1 bun test tests/e2e/"
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "agent",
+    "orchestrator",
+    "cli",
+    "bun",
+    "typescript",
+    "codex",
+    "gemini",
+    "ollama",
+    "multi-agent"
+  ],
+  "author": "Vismay Patel",
+  "license": "MIT",
+  "homepage": "https://github.com/vismayIO/braid#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vismayIO/braid.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vismayIO/braid/issues"
+  },
+  "devDependencies": {},
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ]
+}
