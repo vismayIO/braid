@@ -23,34 +23,31 @@ export type SectionAssignment = {
  * ollama: local/private → examples
  */
 export const DEFAULT_SECTIONS: Record<SectionName, ProviderName> = {
+  examples: "ollama",
   overview: "gemini",
   setup: "codex",
-  examples: "ollama",
 };
 
-export function buildSectionPrompt(
-  section: SectionName,
-  task: string
-): string {
+export function buildSectionPrompt(section: SectionName, task: string): string {
   switch (section) {
     case "overview":
       return (
         `You are writing the "Overview" section of a README for the following task:\n${task}\n\n` +
-        `Write 2-4 paragraphs that describe what the project does, why it exists, and who it is for. ` +
-        `Be clear, concise, and engaging. Do NOT include installation instructions or code examples.`
+        "Write 2-4 paragraphs that describe what the project does, why it exists, and who it is for. " +
+        "Be clear, concise, and engaging. Do NOT include installation instructions or code examples."
       );
     case "setup":
       return (
         `You are writing the "Setup & Installation" section of a README for the following task:\n${task}\n\n` +
-        `Write step-by-step installation and configuration instructions. ` +
-        `Include prerequisite requirements, install commands, and environment variable setup. ` +
-        `Use markdown code blocks for commands.`
+        "Write step-by-step installation and configuration instructions. " +
+        "Include prerequisite requirements, install commands, and environment variable setup. " +
+        "Use markdown code blocks for commands."
       );
     case "examples":
       return (
         `You are writing the "Usage Examples" section of a README for the following task:\n${task}\n\n` +
-        `Write 2-3 concrete usage examples with real commands and expected output. ` +
-        `Use markdown code blocks. Show common use cases and edge cases.`
+        "Write 2-3 concrete usage examples with real commands and expected output. " +
+        "Use markdown code blocks. Show common use cases and edge cases."
       );
   }
 }
@@ -61,13 +58,13 @@ export function buildSectionPrompt(
  */
 export function buildAssignments(
   task: string,
-  sectionMap: Record<SectionName, ProviderName> = DEFAULT_SECTIONS
+  sectionMap: Record<SectionName, ProviderName> = DEFAULT_SECTIONS,
 ): SectionAssignment[] {
   const sections: SectionName[] = ["overview", "setup", "examples"];
   return sections.map((section) => ({
-    section,
-    provider: sectionMap[section],
     marker: `<!-- agent:${sectionMap[section]} -->`,
     prompt: buildSectionPrompt(section, task),
+    provider: sectionMap[section],
+    section,
   }));
 }

@@ -2,7 +2,7 @@
  * Unit tests for InMemoryClient.
  */
 
-import { describe, it, expect, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { InMemoryClient } from "./in-memory-client.ts";
 
 describe("InMemoryClient", () => {

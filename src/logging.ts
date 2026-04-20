@@ -4,8 +4,7 @@
  * Also emits a one-line console summary per event.
  */
 
-import { existsSync, mkdirSync } from "fs";
-import { appendFileSync } from "fs";
+import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 
 export type EventType =
   | "provider.start"
@@ -53,15 +52,25 @@ export class Logger {
     const entry: LogEvent = {
       ...event,
       timestamp_ms: Date.now(),
-    };
-    appendFileSync(this.filePath, JSON.stringify(entry) + "\n", "utf8");
+    } as LogEvent;
+    appendFileSync(this.filePath, `${JSON.stringify(entry)}\n`, "utf8");
     // One-line console summary
     const parts: string[] = [`[${entry.event}]`];
-    if (entry.provider) parts.push(`provider=${entry.provider}`);
-    if (entry.key) parts.push(`key=${entry.key}`);
-    if (entry.agent) parts.push(`agent=${entry.agent}`);
-    if (entry.duration_ms !== undefined) parts.push(`duration=${entry.duration_ms}ms`);
-    if (entry.error) parts.push(`error=${entry.error}`);
+    if (entry.provider) {
+      parts.push(`provider=${entry.provider}`);
+    }
+    if (entry.key) {
+      parts.push(`key=${entry.key}`);
+    }
+    if (entry.agent) {
+      parts.push(`agent=${entry.agent}`);
+    }
+    if (entry.duration_ms !== undefined) {
+      parts.push(`duration=${entry.duration_ms}ms`);
+    }
+    if (entry.error) {
+      parts.push(`error=${entry.error}`);
+    }
     console.error(parts.join(" "));
   }
 

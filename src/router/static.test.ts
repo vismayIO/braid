@@ -2,12 +2,8 @@
  * Unit tests for the static router.
  */
 
-import { describe, it, expect } from "bun:test";
-import {
-  DEFAULT_SECTIONS,
-  buildAssignments,
-  buildSectionPrompt,
-} from "./static.ts";
+import { describe, expect, it } from "bun:test";
+import { buildAssignments, buildSectionPrompt, DEFAULT_SECTIONS } from "./static";
 
 describe("DEFAULT_SECTIONS", () => {
   it("maps overview to gemini", () => {
@@ -43,7 +39,11 @@ describe("buildAssignments", () => {
   });
 
   it("respects section map override", () => {
-    const allOllama = { overview: "ollama" as const, setup: "ollama" as const, examples: "ollama" as const };
+    const allOllama = {
+      examples: "ollama" as const,
+      overview: "ollama" as const,
+      setup: "ollama" as const,
+    };
     const assignments = buildAssignments("test task", allOllama);
     for (const a of assignments) {
       expect(a.provider).toBe("ollama");

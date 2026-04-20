@@ -6,10 +6,10 @@
  * Run: RUN_E2E=1 bun test tests/e2e/ollama.smoke.ts
  */
 
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { OllamaAdapter } from "../../src/providers/ollama.ts";
 
-const RUN_E2E = process.env["RUN_E2E"] === "1";
+const RUN_E2E = process.env.RUN_E2E === "1";
 
 describe("E2E: Ollama single-section smoke", () => {
   it("ollama is available or test is skipped", async () => {
@@ -21,7 +21,7 @@ describe("E2E: Ollama single-section smoke", () => {
     const adapter = new OllamaAdapter();
     const avail = await adapter.isAvailable();
 
-    if (!avail.cli && !avail.api) {
+    if (!(avail.cli || avail.api)) {
       console.log("Skipping: Ollama not available in this environment");
       return;
     }
@@ -31,9 +31,9 @@ describe("E2E: Ollama single-section smoke", () => {
 
     try {
       const result = await adapter.run({
-        prompt: "Write a single paragraph describing what TypeScript is. Keep it under 100 words.",
         marker: "<!-- agent:ollama -->",
         memoryCtx: "",
+        prompt: "Write a single paragraph describing what TypeScript is. Keep it under 100 words.",
         signal: ac.signal,
       });
 

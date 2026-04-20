@@ -9,11 +9,11 @@
  *          This proves cross-agent memory read (AC-7).
  */
 
-import type { ProviderAdapter } from "./providers/types.ts";
-import type { MemoryClient } from "./memory/types.ts";
-import type { Logger } from "./logging.ts";
-import type { SectionOutput } from "./merger/readme.ts";
-import type { SectionAssignment } from "./router/static.ts";
+import type { Logger } from "./logging";
+import type { MemoryClient } from "./memory/types";
+import type { SectionOutput } from "./merger/readme";
+import type { ProviderAdapter, RunResult } from "./providers/types";
+import type { SectionAssignment } from "./router/static";
 
 export type OrchestratorOpts = {
   task: string;
@@ -38,9 +38,7 @@ export type OrchestratorResult = {
 
 const PHASE2_PREFERENCE: string[] = ["gemini", "codex", "ollama"];
 
-export async function runOrchestrator(
-  opts: OrchestratorOpts
-): Promise<OrchestratorResult> {
+export async function runOrchestrator(opts: OrchestratorOpts): Promise<OrchestratorResult> {
   const { task, assignments, providers, memory, logger, timeoutMs = 60_000 } = opts;
 
   const wallStart = Date.now();
@@ -54,13 +52,18 @@ export async function runOrchestrator(
     Array.from(providers.entries()).map(async ([name, adapter]) => {
       const avail = await adapter.isAvailable();
       availMap.set(name, avail);
-      if (!avail.cli && !avail.api) {
+      if (!(avail.cli || avail.api)) {
         const msg = `provider unavailable: ${name} (cli=${avail.cli}, api=${avail.api})`;
         console.error(msg);
         skippedProviders.push(name);
-        logger.emit({ event: "provider.end", provider: name, error: msg, duration_ms: 0 });
+        logger.emit({
+          duration_ms: 0,
+          error: msg,
+          event: "provider.end",
+          provider: name,
+        });
       }
-    })
+    }),
   );
 
   // ── Phase 1: Parallel dispatch ────────────────────────────────────────────
@@ -82,10 +85,10 @@ export async function runOrchestrator(
 
       if (memoryCtx) {
         logger.emit({
-          event: "memory.read",
-          provider: providerName,
           agent: providerName,
+          event: "memory.read",
           key: `session:${sessionId}:context`,
+          provider: providerName,
         });
       }
 
@@ -96,12 +99,12 @@ export async function runOrchestrator(
       logger.emit({ event: "provider.start", provider: providerName });
       const startMs = Date.now();
 
-      let result;
+      let result: RunResult;
       try {
         result = await adapter.run({
-          prompt: `${prompt}\n\nTask: ${task}`,
           marker,
           memoryCtx,
+          prompt: `${prompt}\n\nTask: ${task}`,
           signal: ac.signal,
         });
       } finally {
@@ -109,11 +112,11 @@ export async function runOrchestrator(
       }
 
       logger.emit({
+        duration_ms: result.duration_ms,
+        error: result.error,
         event: "provider.end",
         provider: providerName,
-        duration_ms: result.duration_ms,
         via: result.via,
-        error: result.error,
       });
 
       if (result.error) {
@@ -128,24 +131,27 @@ export async function runOrchestrator(
       const payload = `note: ${note}\n---\ndraft: ${result.output.slice(0, 500)}`;
       await memory.write(draftKey, payload, providerName);
       logger.emit({
-        event: "memory.write",
-        provider: providerName,
         agent: providerName,
+        event: "memory.write",
         key: draftKey,
+        provider: providerName,
       });
 
       const sectionOutput: SectionOutput = {
-        section: section as SectionOutput["section"],
         content: result.output,
         provider: providerName,
+        section: section as SectionOutput["section"],
       };
 
-      return { sectionOutput, providerName, startMs };
-    })
+      return { providerName, sectionOutput, startMs };
+    }),
   );
 
   // Collect successful phase-1 results
-  const phase1Successes: Array<{ sectionOutput: SectionOutput; providerName: string }> = [];
+  const phase1Successes: Array<{
+    sectionOutput: SectionOutput;
+    providerName: string;
+  }> = [];
   for (const settled of phase1Results) {
     if (settled.status === "fulfilled" && settled.value !== null) {
       phase1Successes.push(settled.value);
@@ -160,7 +166,7 @@ export async function runOrchestrator(
 
   // Find the phase-2 provider in preference order
   const phase2ProviderName = PHASE2_PREFERENCE.find((name) =>
-    phase1Successes.some((s) => s.providerName === name)
+    phase1Successes.some((s) => s.providerName === name),
   );
 
   if (phase2ProviderName) {
@@ -177,48 +183,51 @@ export async function runOrchestrator(
       for (const entry of allNotes) {
         if (entry.agent !== phase2ProviderName && entry.key.startsWith("phase1:")) {
           logger.emit({
-            event: "memory.read",
-            provider: phase2ProviderName,
             agent: phase2ProviderName,
+            event: "memory.read",
             key: entry.key,
+            provider: phase2ProviderName,
           });
         }
       }
 
       const summaryMarker = `<!-- agent:${phase2ProviderName} -->`;
       const summaryPrompt =
-        `You are writing the executive summary for a README. ` +
+        "You are writing the executive summary for a README. " +
         `Other agents have written sections about this task: "${task}". ` +
         `Here are their notes:\n\n${crossAgentNotes}\n\n` +
-        `Write a 2-3 sentence summary that ties all sections together. ` +
-        `Do NOT repeat the full content — just summarize the whole document.`;
+        "Write a 2-3 sentence summary that ties all sections together. " +
+        "Do NOT repeat the full content — just summarize the whole document.";
 
       const ac2 = new AbortController();
       const timer2 = setTimeout(() => ac2.abort(), timeoutMs);
 
-      logger.emit({ event: "provider.start", provider: `${phase2ProviderName}:phase2` });
+      logger.emit({
+        event: "provider.start",
+        provider: `${phase2ProviderName}:phase2`,
+      });
 
       try {
         const summaryResult = await phase2Adapter.run({
-          prompt: summaryPrompt,
           marker: summaryMarker,
           memoryCtx: crossAgentNotes,
+          prompt: summaryPrompt,
           signal: ac2.signal,
         });
 
         logger.emit({
+          duration_ms: summaryResult.duration_ms,
+          error: summaryResult.error,
           event: "provider.end",
           provider: `${phase2ProviderName}:phase2`,
-          duration_ms: summaryResult.duration_ms,
           via: summaryResult.via,
-          error: summaryResult.error,
         });
 
         if (!summaryResult.error) {
           summary = {
-            section: "summary",
             content: summaryResult.output,
             provider: phase2ProviderName,
+            section: "summary",
           };
         }
       } finally {
@@ -227,12 +236,12 @@ export async function runOrchestrator(
     }
   }
 
-  logger.emit({ event: "run.complete", duration_ms: Date.now() - wallStart });
+  logger.emit({ duration_ms: Date.now() - wallStart, event: "run.complete" });
 
   return {
-    sections: phase1Successes.map((s) => s.sectionOutput),
-    summary,
-    skippedProviders,
     failedProviders,
+    sections: phase1Successes.map((s) => s.sectionOutput),
+    skippedProviders,
+    summary,
   };
 }

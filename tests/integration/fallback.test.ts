@@ -7,24 +7,24 @@
  *  - Run completes (no throw), exit code 0 semantics
  */
 
-import { describe, it, expect } from "bun:test";
-import { runOrchestrator } from "../../src/orchestrator.ts";
-import { buildAssignments } from "../../src/router/static.ts";
-import { InMemoryClient } from "../../src/memory/in-memory-client.ts";
+import { describe, expect, it } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
 import { Logger } from "../../src/logging.ts";
+import { InMemoryClient } from "../../src/memory/in-memory-client.ts";
+import { runOrchestrator } from "../../src/orchestrator.ts";
 import type { ProviderAdapter, RunOpts, RunResult } from "../../src/providers/types.ts";
-import { readFileSync, existsSync } from "fs";
+import { buildAssignments } from "../../src/router/static.ts";
 
 function makeAvailableAdapter(name: string): ProviderAdapter {
   return {
-    name,
     async isAvailable() {
-      return { cli: true, api: false };
+      return { api: false, cli: true };
     },
+    name,
     async run(opts: RunOpts): Promise<RunResult> {
       return {
-        output: `Output from ${name}. ${opts.marker}`,
         duration_ms: 10,
+        output: `Output from ${name}. ${opts.marker}`,
         via: "cli",
       };
     },
@@ -33,16 +33,16 @@ function makeAvailableAdapter(name: string): ProviderAdapter {
 
 function makeUnavailableAdapter(name: string): ProviderAdapter {
   return {
-    name,
     async isAvailable() {
-      return { cli: false, api: false };
+      return { api: false, cli: false };
     },
+    name,
     async run(): Promise<RunResult> {
       return {
-        output: "",
         duration_ms: 0,
-        via: "cli",
         error: `provider unavailable: ${name}`,
+        output: "",
+        via: "cli",
       };
     },
   };
@@ -64,11 +64,11 @@ describe("AC-8: Fallback behavior", () => {
     const memory = new InMemoryClient();
 
     const result = await runOrchestrator({
-      task: "test",
       assignments: buildAssignments("test"),
-      providers,
-      memory,
       logger,
+      memory,
+      providers,
+      task: "test",
     });
 
     expect(result.skippedProviders).toContain("gemini");
@@ -86,11 +86,11 @@ describe("AC-8: Fallback behavior", () => {
     const memory = new InMemoryClient();
 
     const result = await runOrchestrator({
-      task: "test",
       assignments: buildAssignments("test"),
-      providers,
-      memory,
       logger,
+      memory,
+      providers,
+      task: "test",
     });
 
     const sections = result.sections;
@@ -110,11 +110,11 @@ describe("AC-8: Fallback behavior", () => {
 
     // Must not throw
     const result = await runOrchestrator({
-      task: "test",
       assignments: buildAssignments("test"),
-      providers,
-      memory,
       logger,
+      memory,
+      providers,
+      task: "test",
     });
 
     expect(result.sections.length).toBe(0);
@@ -132,11 +132,11 @@ describe("AC-8: Fallback behavior", () => {
     const memory = new InMemoryClient();
 
     await runOrchestrator({
-      task: "test",
       assignments: buildAssignments("test"),
-      providers,
-      memory,
       logger,
+      memory,
+      providers,
+      task: "test",
     });
 
     const path = logger.logFile;
@@ -145,12 +145,10 @@ describe("AC-8: Fallback behavior", () => {
     const lines = readFileSync(path, "utf8").trim().split("\n").filter(Boolean);
     const events = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
 
-    const errorEnds = events.filter(
-      (e) => e["event"] === "provider.end" && e["error"] !== undefined
-    );
+    const errorEnds = events.filter((e) => e.event === "provider.end" && e.error !== undefined);
 
     // gemini and codex should have error end events
-    const errorProviders = errorEnds.map((e) => e["provider"]);
+    const errorProviders = errorEnds.map((e) => e.provider);
     expect(errorProviders).toContain("gemini");
     expect(errorProviders).toContain("codex");
   });
@@ -166,11 +164,11 @@ describe("AC-8: Fallback behavior", () => {
     const memory = new InMemoryClient();
 
     const result = await runOrchestrator({
-      task: "write README",
       assignments: buildAssignments("write README"),
-      providers,
-      memory,
       logger,
+      memory,
+      providers,
+      task: "write README",
     });
 
     const ollamaSection = result.sections.find((s) => s.provider === "ollama");

@@ -12,18 +12,16 @@
  *   C) Wait for an official JS/TS client package.
  */
 
-import type { MemoryClient, MemEntry } from "./types.ts";
+import type { MemEntry, MemoryClient } from "./types.ts";
 
 export class MempalaceClient implements MemoryClient {
   // TODO(v0.2): inject MCP client or HTTP base URL here
   constructor(
-    _opts: {
-      // TODO(v0.2): baseUrl?: string; sessionId?: string;
-    } = {}
+    _opts: Record<string, never> = {},
   ) {
     throw new Error(
       "MempalaceClient is not implemented: mempalace has no JS/TS client. " +
-        "Use InMemoryClient for now. See .omc/drafts/mempalace-spike.md."
+        "Use InMemoryClient for now. See .omc/drafts/mempalace-spike.md.",
     );
   }
 

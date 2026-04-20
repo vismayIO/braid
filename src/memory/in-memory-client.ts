@@ -4,7 +4,7 @@
  * Thread-safe within a single Bun process (single-threaded JS event loop).
  */
 
-import type { MemoryClient, MemEntry } from "./types.ts";
+import type { MemEntry, MemoryClient } from "./types.ts";
 
 export class InMemoryClient implements MemoryClient {
   private readonly store = new Map<string, MemEntry>();
@@ -15,10 +15,10 @@ export class InMemoryClient implements MemoryClient {
 
   async write(key: string, value: string, agent: string): Promise<void> {
     this.store.set(key, {
-      key,
-      value,
       agent,
+      key,
       ts: Date.now(),
+      value,
     });
   }
 
