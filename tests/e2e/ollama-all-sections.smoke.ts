@@ -6,18 +6,18 @@
  * Run: RUN_E2E=1 bun test tests/e2e/ollama-all-sections.smoke.ts
  */
 
-import { describe, it, expect } from "bun:test";
-import { runOrchestrator } from "../../src/orchestrator.ts";
-import { buildAssignments } from "../../src/router/static.ts";
-import { writeReadme } from "../../src/merger/readme.ts";
-import { InMemoryClient } from "../../src/memory/in-memory-client.ts";
+import { describe, expect, it } from "bun:test";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { Logger } from "../../src/logging.ts";
+import { InMemoryClient } from "../../src/memory/in-memory-client.ts";
+import type { SectionOutput } from "../../src/merger/readme.ts";
+import { writeReadme } from "../../src/merger/readme.ts";
+import { runOrchestrator } from "../../src/orchestrator.ts";
 import { OllamaAdapter } from "../../src/providers/ollama.ts";
 import type { ProviderAdapter } from "../../src/providers/types.ts";
-import type { SectionOutput } from "../../src/merger/readme.ts";
-import { existsSync, unlinkSync, readFileSync } from "fs";
+import { buildAssignments } from "../../src/router/static.ts";
 
-const RUN_E2E = process.env["RUN_E2E"] === "1";
+const RUN_E2E = process.env.RUN_E2E === "1";
 
 describe("E2E: Ollama all-sections full pipeline", () => {
   it("produces README.md with ollama marker from all three sections", async () => {
@@ -29,16 +29,16 @@ describe("E2E: Ollama all-sections full pipeline", () => {
     const ollamaAdapter = new OllamaAdapter();
     const avail = await ollamaAdapter.isAvailable();
 
-    if (!avail.cli && !avail.api) {
+    if (!(avail.cli || avail.api)) {
       console.log("Skipping: Ollama not available in this environment");
       return;
     }
 
     // Override all sections to use ollama
     const allOllamaMap = {
+      examples: "ollama" as const,
       overview: "ollama" as const,
       setup: "ollama" as const,
-      examples: "ollama" as const,
     };
 
     const task = "write a markdown README for a TypeScript utility library";
@@ -54,22 +54,26 @@ describe("E2E: Ollama all-sections full pipeline", () => {
     const memory = new InMemoryClient();
 
     const result = await runOrchestrator({
-      task,
       assignments,
-      providers,
-      memory,
       logger,
+      memory,
+      providers,
+      task,
       timeoutMs: 120_000,
     });
 
     expect(result.sections.length).toBeGreaterThan(0);
 
     const allSections: SectionOutput[] = [];
-    if (result.summary) allSections.push(result.summary);
+    if (result.summary) {
+      allSections.push(result.summary);
+    }
     allSections.push(...result.sections);
 
     const outputPath = "/tmp/braid-e2e-readme.md";
-    if (existsSync(outputPath)) unlinkSync(outputPath);
+    if (existsSync(outputPath)) {
+      unlinkSync(outputPath);
+    }
 
     const mergeResult = await writeReadme(outputPath, allSections);
 
@@ -87,7 +91,9 @@ describe("E2E: Ollama all-sections full pipeline", () => {
     expect(memEntries.length).toBeGreaterThan(0);
 
     // Clean up
-    if (existsSync(outputPath)) unlinkSync(outputPath);
+    if (existsSync(outputPath)) {
+      unlinkSync(outputPath);
+    }
 
     console.log(`E2E passed. Sections: ${mergeResult.included.join(", ")}`);
     console.log(`Log: ${logger.logFile}`);

@@ -4,7 +4,7 @@
  * Paid API only called when BRAID_ALLOW_PAID=1 AND OPENAI_API_KEY is set.
  */
 
-import type { ProviderAdapter, RunOpts, RunResult } from "./types.ts";
+import type { ProviderAdapter, RunOpts, RunResult } from "./types";
 
 const CODEX_CLI = "codex";
 const OPENAI_API_URL = "https://api.openai.com/v1/responses";
@@ -17,18 +17,15 @@ export class CodexAdapter implements ProviderAdapter {
   private readonly apiKey: string | undefined;
 
   constructor() {
-    this.allowPaid = process.env["BRAID_ALLOW_PAID"] === "1";
-    this.apiKey = process.env["OPENAI_API_KEY"];
+    this.allowPaid = process.env.BRAID_ALLOW_PAID === "1";
+    this.apiKey = process.env.OPENAI_API_KEY;
   }
 
   async isAvailable(): Promise<{ cli: boolean; api: boolean }> {
     const cli = await this._probeCliHello();
-    const api =
-      this.allowPaid &&
-      !!this.apiKey &&
-      (await this._probeApi());
+    const api = this.allowPaid && !!this.apiKey && (await this._probeApi());
 
-    return { cli, api };
+    return { api, cli };
   }
 
   async run(opts: RunOpts): Promise<RunResult> {
@@ -41,17 +38,17 @@ export class CodexAdapter implements ProviderAdapter {
       return this._runApi(opts);
     }
 
-    const reason = !this.allowPaid
-      ? "BRAID_ALLOW_PAID not set"
-      : !this.apiKey
-      ? "OPENAI_API_KEY not set"
-      : "CLI unavailable and API probe failed";
+    const reason = this.allowPaid
+      ? this.apiKey
+        ? "CLI unavailable and API probe failed"
+        : "OPENAI_API_KEY not set"
+      : "BRAID_ALLOW_PAID not set";
 
     return {
-      output: "",
       duration_ms: 0,
-      via: "cli",
       error: `provider unavailable: codex — ${reason}`,
+      output: "",
+      via: "cli",
     };
   }
 
@@ -66,16 +63,18 @@ export class CodexAdapter implements ProviderAdapter {
       const tmpFile = `/tmp/braid-codex-hello-${Date.now()}.txt`;
       await Bun.write(tmpFile, "echo hi");
       const proc = Bun.spawn([CODEX_CLI, "exec", "--prompt", tmpFile], {
-        stdout: "pipe",
-        stderr: "pipe",
         signal: ac.signal,
+        stderr: "pipe",
+        stdout: "pipe",
       });
       const exitCode = await proc.exited;
       clearTimeout(timer);
       try {
-        const fs = await import("fs");
+        const fs = await import("node:fs");
         fs.unlinkSync(tmpFile);
-      } catch { /* best-effort */ }
+      } catch {
+        /* best-effort */
+      }
       return exitCode === 0;
     } catch {
       return false;
@@ -83,21 +82,23 @@ export class CodexAdapter implements ProviderAdapter {
   }
 
   private async _probeApi(): Promise<boolean> {
-    if (!this.apiKey) return false;
+    if (!this.apiKey) {
+      return false;
+    }
     try {
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), HELLO_TIMEOUT_MS);
       const res = await fetch(OPENAI_API_URL, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
-          model: "codex-mini-latest",
           input: "echo hi",
           max_output_tokens: 5,
+          model: "codex-mini-latest",
         }),
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        method: "POST",
         signal: ac.signal,
       });
       clearTimeout(timer);
@@ -116,9 +117,9 @@ export class CodexAdapter implements ProviderAdapter {
       await Bun.write(tmpFile, this._buildPrompt(opts));
 
       const proc = Bun.spawn([CODEX_CLI, "exec", "--prompt", tmpFile], {
-        stdout: "pipe",
-        stderr: "pipe",
         signal: opts.signal,
+        stderr: "pipe",
+        stdout: "pipe",
       });
 
       const [exitCode, stdout, stderr] = await Promise.all([
@@ -131,30 +132,32 @@ export class CodexAdapter implements ProviderAdapter {
 
       // Clean up temp file
       try {
-        const fs = await import("fs");
+        const fs = await import("node:fs");
         fs.unlinkSync(tmpFile);
-      } catch { /* best-effort cleanup */ }
+      } catch {
+        /* best-effort cleanup */
+      }
 
       if (exitCode !== 0) {
         return {
-          output: "",
           duration_ms,
-          via: "cli",
           error: `codex CLI exited ${exitCode}: ${stderr.slice(0, 200)}`,
+          output: "",
+          via: "cli",
         };
       }
 
       return {
-        output: this._ensureMarker(stdout, opts.marker),
         duration_ms,
+        output: this._ensureMarker(stdout, opts.marker),
         via: "cli",
       };
     } catch (err) {
       return {
-        output: "",
         duration_ms: Date.now() - start,
-        via: "cli",
         error: `codex CLI error: ${String(err)}`,
+        output: "",
+        via: "cli",
       };
     }
   }
@@ -163,16 +166,16 @@ export class CodexAdapter implements ProviderAdapter {
     const start = Date.now();
     try {
       const res = await fetch(OPENAI_API_URL, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
-          model: "codex-mini-latest",
           input: this._buildPrompt(opts),
           max_output_tokens: 1024,
+          model: "codex-mini-latest",
         }),
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        method: "POST",
         signal: opts.signal,
       });
 
@@ -181,10 +184,10 @@ export class CodexAdapter implements ProviderAdapter {
       if (!res.ok) {
         const text = await res.text();
         return {
-          output: "",
           duration_ms,
-          via: "api",
           error: `codex API ${res.status}: ${text.slice(0, 200)}`,
+          output: "",
+          via: "api",
         };
       }
 
@@ -192,21 +195,19 @@ export class CodexAdapter implements ProviderAdapter {
       const json = (await res.json()) as any;
       // OpenAI responses API returns output array
       const text: string =
-        json?.output?.[0]?.content?.[0]?.text ??
-        json?.choices?.[0]?.message?.content ??
-        "";
+        json?.output?.[0]?.content?.[0]?.text ?? json?.choices?.[0]?.message?.content ?? "";
 
       return {
-        output: this._ensureMarker(text, opts.marker),
         duration_ms,
+        output: this._ensureMarker(text, opts.marker),
         via: "api",
       };
     } catch (err) {
       return {
-        output: "",
         duration_ms: Date.now() - start,
-        via: "api",
         error: `codex API error: ${String(err)}`,
+        output: "",
+        via: "api",
       };
     }
   }
@@ -217,12 +218,16 @@ export class CodexAdapter implements ProviderAdapter {
       parts.push(`## Context from other agents\n${opts.memoryCtx}\n`);
     }
     parts.push(opts.prompt);
-    parts.push(`\nIMPORTANT: You must include the exact string "${opts.marker}" somewhere in your output.`);
+    parts.push(
+      `\nIMPORTANT: You must include the exact string "${opts.marker}" somewhere in your output.`,
+    );
     return parts.join("\n");
   }
 
   private _ensureMarker(output: string, marker: string): string {
-    if (output.includes(marker)) return output;
+    if (output.includes(marker)) {
+      return output;
+    }
     return `${output}\n\n${marker}`;
   }
 }

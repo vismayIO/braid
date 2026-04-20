@@ -5,16 +5,16 @@
  * braid "<task>" → runs orchestrator + merger + writes ./README.md
  */
 
-import { runOrchestrator } from "./orchestrator.ts";
-import { buildAssignments, DEFAULT_SECTIONS } from "./router/static.ts";
-import type { SectionName, ProviderName } from "./router/static.ts";
-import { writeReadme } from "./merger/readme.ts";
-import type { SectionOutput } from "./merger/readme.ts";
 import { Logger } from "./logging.ts";
 import { InMemoryClient } from "./memory/in-memory-client.ts";
+import type { SectionOutput } from "./merger/readme.ts";
+import { writeReadme } from "./merger/readme.ts";
+import { runOrchestrator } from "./orchestrator.ts";
 import { CodexAdapter } from "./providers/codex.ts";
 import { GeminiAdapter } from "./providers/gemini.ts";
 import { OllamaAdapter } from "./providers/ollama.ts";
+import type { ProviderName, SectionName } from "./router/static.ts";
+import { buildAssignments, DEFAULT_SECTIONS } from "./router/static.ts";
 
 const USAGE = `
 braid — Multi-provider AI agent orchestrator
@@ -65,11 +65,11 @@ async function main(): Promise<void> {
 
   // Support section override for testing (BRAID_SECTION_OVERRIDE=all:ollama)
   let sectionMap: Record<SectionName, ProviderName> = { ...DEFAULT_SECTIONS };
-  if (process.env["BRAID_SECTION_OVERRIDE"]) {
-    const override = process.env["BRAID_SECTION_OVERRIDE"];
+  if (process.env.BRAID_SECTION_OVERRIDE) {
+    const override = process.env.BRAID_SECTION_OVERRIDE;
     if (override.startsWith("all:")) {
       const provider = override.slice(4) as ProviderName;
-      sectionMap = { overview: provider, setup: provider, examples: provider };
+      sectionMap = { examples: provider, overview: provider, setup: provider };
     }
   }
 
@@ -80,11 +80,11 @@ async function main(): Promise<void> {
   console.error(`[braid] Providers: ${[...providers.keys()].join(", ")}`);
 
   const result = await runOrchestrator({
-    task,
     assignments,
-    providers,
-    memory,
     logger,
+    memory,
+    providers,
+    task,
   });
 
   // Assemble sections for merger: summary first, then phase-1 sections
@@ -97,13 +97,13 @@ async function main(): Promise<void> {
   const mergeResult = await writeReadme("./README.md", allSections);
 
   logger.emit({
-    event: "merge.complete",
     duration_ms: 0,
+    event: "merge.complete",
     included: mergeResult.included,
     skipped: mergeResult.skipped,
   });
 
-  console.error(`[braid] README.md written`);
+  console.error("[braid] README.md written");
   console.error(`[braid] Included providers: ${mergeResult.included.join(", ")}`);
 
   if (result.skippedProviders.length > 0) {

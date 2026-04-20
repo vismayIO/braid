@@ -4,7 +4,7 @@
  * Paid API only called when BRAID_ALLOW_PAID=1 AND GEMINI_API_KEY is set.
  */
 
-import type { ProviderAdapter, RunOpts, RunResult } from "./types.ts";
+import type { ProviderAdapter, RunOpts, RunResult } from "./types";
 
 const GEMINI_CLI = "gemini";
 const GEMINI_API_URL =
@@ -18,18 +18,15 @@ export class GeminiAdapter implements ProviderAdapter {
   private readonly apiKey: string | undefined;
 
   constructor() {
-    this.allowPaid = process.env["BRAID_ALLOW_PAID"] === "1";
-    this.apiKey = process.env["GEMINI_API_KEY"];
+    this.allowPaid = process.env.BRAID_ALLOW_PAID === "1";
+    this.apiKey = process.env.GEMINI_API_KEY;
   }
 
   async isAvailable(): Promise<{ cli: boolean; api: boolean }> {
     const cli = await this._probeCliHello();
-    const api =
-      this.allowPaid &&
-      !!this.apiKey &&
-      (await this._probeApi());
+    const api = this.allowPaid && !!this.apiKey && (await this._probeApi());
 
-    return { cli, api };
+    return { api, cli };
   }
 
   async run(opts: RunOpts): Promise<RunResult> {
@@ -42,17 +39,17 @@ export class GeminiAdapter implements ProviderAdapter {
       return this._runApi(opts);
     }
 
-    const reason = !this.allowPaid
-      ? "BRAID_ALLOW_PAID not set"
-      : !this.apiKey
-      ? "GEMINI_API_KEY not set"
-      : "CLI unavailable and API probe failed";
+    const reason = this.allowPaid
+      ? this.apiKey
+        ? "CLI unavailable and API probe failed"
+        : "GEMINI_API_KEY not set"
+      : "BRAID_ALLOW_PAID not set";
 
     return {
-      output: "",
       duration_ms: 0,
-      via: "cli",
       error: `provider unavailable: gemini — ${reason}`,
+      output: "",
+      via: "cli",
     };
   }
 
@@ -63,9 +60,9 @@ export class GeminiAdapter implements ProviderAdapter {
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), HELLO_TIMEOUT_MS);
       const proc = Bun.spawn([GEMINI_CLI, "-p", "echo hi"], {
-        stdout: "pipe",
-        stderr: "pipe",
         signal: ac.signal,
+        stderr: "pipe",
+        stdout: "pipe",
       });
       const exitCode = await proc.exited;
       clearTimeout(timer);
@@ -76,18 +73,20 @@ export class GeminiAdapter implements ProviderAdapter {
   }
 
   private async _probeApi(): Promise<boolean> {
-    if (!this.apiKey) return false;
+    if (!this.apiKey) {
+      return false;
+    }
     try {
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), HELLO_TIMEOUT_MS);
       const url = `${GEMINI_API_URL}?key=${this.apiKey}`;
       const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: "hi" }] }],
           generationConfig: { maxOutputTokens: 5 },
         }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
         signal: ac.signal,
       });
       clearTimeout(timer);
@@ -102,9 +101,9 @@ export class GeminiAdapter implements ProviderAdapter {
     try {
       const prompt = this._buildPrompt(opts);
       const proc = Bun.spawn([GEMINI_CLI, "-p", prompt], {
-        stdout: "pipe",
-        stderr: "pipe",
         signal: opts.signal,
+        stderr: "pipe",
+        stdout: "pipe",
       });
 
       const [exitCode, stdout, stderr] = await Promise.all([
@@ -117,24 +116,24 @@ export class GeminiAdapter implements ProviderAdapter {
 
       if (exitCode !== 0) {
         return {
-          output: "",
           duration_ms,
-          via: "cli",
           error: `gemini CLI exited ${exitCode}: ${stderr.slice(0, 200)}`,
+          output: "",
+          via: "cli",
         };
       }
 
       return {
-        output: this._ensureMarker(stdout, opts.marker),
         duration_ms,
+        output: this._ensureMarker(stdout, opts.marker),
         via: "cli",
       };
     } catch (err) {
       return {
-        output: "",
         duration_ms: Date.now() - start,
-        via: "cli",
         error: `gemini CLI error: ${String(err)}`,
+        output: "",
+        via: "cli",
       };
     }
   }
@@ -144,12 +143,12 @@ export class GeminiAdapter implements ProviderAdapter {
     try {
       const url = `${GEMINI_API_URL}?key=${this.apiKey}`;
       const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: this._buildPrompt(opts) }] }],
           generationConfig: { maxOutputTokens: 2048 },
         }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
         signal: opts.signal,
       });
 
@@ -158,29 +157,28 @@ export class GeminiAdapter implements ProviderAdapter {
       if (!res.ok) {
         const text = await res.text();
         return {
-          output: "",
           duration_ms,
-          via: "api",
           error: `gemini API ${res.status}: ${text.slice(0, 200)}`,
+          output: "",
+          via: "api",
         };
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const json = (await res.json()) as any;
-      const text: string =
-        json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      const text: string = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 
       return {
-        output: this._ensureMarker(text, opts.marker),
         duration_ms,
+        output: this._ensureMarker(text, opts.marker),
         via: "api",
       };
     } catch (err) {
       return {
-        output: "",
         duration_ms: Date.now() - start,
-        via: "api",
         error: `gemini API error: ${String(err)}`,
+        output: "",
+        via: "api",
       };
     }
   }
@@ -191,12 +189,16 @@ export class GeminiAdapter implements ProviderAdapter {
       parts.push(`## Context from other agents\n${opts.memoryCtx}\n`);
     }
     parts.push(opts.prompt);
-    parts.push(`\nIMPORTANT: You must include the exact string "${opts.marker}" somewhere in your output.`);
+    parts.push(
+      `\nIMPORTANT: You must include the exact string "${opts.marker}" somewhere in your output.`,
+    );
     return parts.join("\n");
   }
 
   private _ensureMarker(output: string, marker: string): string {
-    if (output.includes(marker)) return output;
+    if (output.includes(marker)) {
+      return output;
+    }
     return `${output}\n\n${marker}`;
   }
 }

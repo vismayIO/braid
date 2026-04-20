@@ -2,8 +2,8 @@
  * Unit tests for the README merger.
  */
 
-import { describe, it, expect } from "bun:test";
-import { mergeSections, SECTION_ORDER } from "./readme.ts";
+import { describe, expect, it } from "bun:test";
+import { mergeSections, SECTION_ORDER } from "./readme";
 import type { SectionOutput } from "./readme.ts";
 
 describe("SECTION_ORDER", () => {
@@ -25,10 +25,26 @@ describe("SECTION_ORDER", () => {
 
 describe("mergeSections", () => {
   const makeSections = (): SectionOutput[] => [
-    { section: "summary", content: "This is a summary. <!-- agent:gemini -->", provider: "gemini" },
-    { section: "overview", content: "This is an overview. <!-- agent:gemini -->", provider: "gemini" },
-    { section: "setup", content: "Install steps. <!-- agent:codex -->", provider: "codex" },
-    { section: "examples", content: "Usage examples. <!-- agent:ollama -->", provider: "ollama" },
+    {
+      content: "This is a summary. <!-- agent:gemini -->",
+      provider: "gemini",
+      section: "summary",
+    },
+    {
+      content: "This is an overview. <!-- agent:gemini -->",
+      provider: "gemini",
+      section: "overview",
+    },
+    {
+      content: "Install steps. <!-- agent:codex -->",
+      provider: "codex",
+      section: "setup",
+    },
+    {
+      content: "Usage examples. <!-- agent:ollama -->",
+      provider: "ollama",
+      section: "examples",
+    },
   ];
 
   it("contains all three agent markers", () => {
@@ -59,7 +75,11 @@ describe("mergeSections", () => {
 
   it("skips missing sections gracefully", () => {
     const partial: SectionOutput[] = [
-      { section: "overview", content: "Overview. <!-- agent:gemini -->", provider: "gemini" },
+      {
+        content: "Overview. <!-- agent:gemini -->",
+        provider: "gemini",
+        section: "overview",
+      },
     ];
     const result = mergeSections(partial);
     expect(result.content).toContain("Overview");
@@ -76,8 +96,8 @@ describe("mergeSections", () => {
 
   it("handles empty content sections by skipping them", () => {
     const sections: SectionOutput[] = [
-      { section: "overview", content: "", provider: "gemini" },
-      { section: "setup", content: "Install steps.", provider: "codex" },
+      { content: "", provider: "gemini", section: "overview" },
+      { content: "Install steps.", provider: "codex", section: "setup" },
     ];
     const result = mergeSections(sections);
     expect(result.content).not.toContain("## Overview");

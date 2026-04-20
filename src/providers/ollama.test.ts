@@ -2,8 +2,8 @@
  * Unit tests for OllamaAdapter.
  */
 
-import { describe, it, expect } from "bun:test";
-import { OllamaAdapter } from "./ollama.ts";
+import { describe, expect, it } from "bun:test";
+import { OllamaAdapter } from "./ollama";
 
 describe("OllamaAdapter", () => {
   describe("isAvailable", () => {
@@ -15,24 +15,29 @@ describe("OllamaAdapter", () => {
     });
 
     it("uses BRAID_OLLAMA_MODEL env override", () => {
-      const orig = process.env["BRAID_OLLAMA_MODEL"];
-      process.env["BRAID_OLLAMA_MODEL"] = "mistral";
+      const orig = process.env.BRAID_OLLAMA_MODEL;
+      process.env.BRAID_OLLAMA_MODEL = "mistral";
       // Construct adapter — model set at construction time
       const adapter = new OllamaAdapter();
       // Access private field via type assertion for testing
       const adapterAny = adapter as unknown as { model: string };
       expect(adapterAny.model).toBe("mistral");
-      if (orig !== undefined) process.env["BRAID_OLLAMA_MODEL"] = orig;
-      else delete process.env["BRAID_OLLAMA_MODEL"];
+      if (orig === undefined) {
+        delete process.env.BRAID_OLLAMA_MODEL;
+      } else {
+        process.env.BRAID_OLLAMA_MODEL = orig;
+      }
     });
 
     it("defaults to llama3.2 when BRAID_OLLAMA_MODEL not set", () => {
-      const orig = process.env["BRAID_OLLAMA_MODEL"];
-      delete process.env["BRAID_OLLAMA_MODEL"];
+      const orig = process.env.BRAID_OLLAMA_MODEL;
+      delete process.env.BRAID_OLLAMA_MODEL;
       const adapter = new OllamaAdapter();
       const adapterAny = adapter as unknown as { model: string };
       expect(adapterAny.model).toBe("llama3.2");
-      if (orig !== undefined) process.env["BRAID_OLLAMA_MODEL"] = orig;
+      if (orig !== undefined) {
+        process.env.BRAID_OLLAMA_MODEL = orig;
+      }
     });
   });
 
@@ -49,9 +54,9 @@ describe("OllamaAdapter", () => {
       }
 
       const result = await adapter.run({
-        prompt: "test",
         marker: "<!-- agent:ollama -->",
         memoryCtx: "",
+        prompt: "test",
         signal: ac.signal,
       });
 

@@ -44,8 +44,10 @@ export function mergeSections(sections: SectionOutput[]): MergeResult {
 
   for (const name of SECTION_ORDER) {
     const s = bySection.get(name);
-    if (!s || !s.content.trim()) {
-      if (s) skipped.push(s.provider);
+    if (!s?.content.trim()) {
+      if (s) {
+        skipped.push(s.provider);
+      }
       continue;
     }
 
@@ -53,10 +55,10 @@ export function mergeSections(sections: SectionOutput[]): MergeResult {
 
     // Section heading map
     const headings: Record<string, string> = {
-      summary: "## Summary",
+      examples: "## Usage Examples",
       overview: "## Overview",
       setup: "## Setup & Installation",
-      examples: "## Usage Examples",
+      summary: "## Summary",
     };
 
     const heading = headings[name] ?? `## ${name}`;
@@ -80,7 +82,7 @@ export function mergeSections(sections: SectionOutput[]): MergeResult {
  */
 export async function writeReadme(
   filePath: string,
-  sections: SectionOutput[]
+  sections: SectionOutput[],
 ): Promise<MergeResult> {
   const result = mergeSections(sections);
   await Bun.write(filePath, result.content);

@@ -11,54 +11,54 @@
  *  (f) failure isolation: one mock throws → others still produce output
  */
 
-import { describe, it, expect, beforeEach } from "bun:test";
-import { runOrchestrator } from "../../src/orchestrator.ts";
-import { buildAssignments } from "../../src/router/static.ts";
-import { InMemoryClient } from "../../src/memory/in-memory-client.ts";
+import { describe, expect, it } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
 import { Logger } from "../../src/logging.ts";
+import { InMemoryClient } from "../../src/memory/in-memory-client.ts";
 import { mergeSections } from "../../src/merger/readme.ts";
+import { runOrchestrator } from "../../src/orchestrator.ts";
 import type { ProviderAdapter, RunOpts, RunResult } from "../../src/providers/types.ts";
-import { readFileSync, unlinkSync, existsSync } from "fs";
+import { buildAssignments } from "../../src/router/static.ts";
 
 const DELAY_MS = 100;
 
 /** Mock adapter that succeeds after a fixed delay. */
 function makeMockAdapter(
   name: string,
-  delayMs = DELAY_MS
+  delayMs = DELAY_MS,
 ): ProviderAdapter & { startTimes: number[] } {
   const startTimes: number[] = [];
   return {
-    name,
-    startTimes,
     async isAvailable() {
-      return { cli: true, api: false };
+      return { api: false, cli: true };
     },
+    name,
     async run(opts: RunOpts): Promise<RunResult> {
       startTimes.push(Date.now());
       await new Promise((r) => setTimeout(r, delayMs));
       return {
-        output: `Section content from ${name}. ${opts.marker}`,
         duration_ms: delayMs,
+        output: `Section content from ${name}. ${opts.marker}`,
         via: "cli",
       };
     },
+    startTimes,
   };
 }
 
 /** Mock adapter that is unavailable. */
-function makeUnavailableAdapter(name: string): ProviderAdapter {
+function _makeUnavailableAdapter(name: string): ProviderAdapter {
   return {
-    name,
     async isAvailable() {
-      return { cli: false, api: false };
+      return { api: false, cli: false };
     },
+    name,
     async run(): Promise<RunResult> {
       return {
-        output: "",
         duration_ms: 0,
-        via: "cli",
         error: `provider unavailable: ${name}`,
+        output: "",
+        via: "cli",
       };
     },
   };
@@ -67,17 +67,17 @@ function makeUnavailableAdapter(name: string): ProviderAdapter {
 /** Mock adapter whose run() returns an error result. */
 function makeFailingAdapter(name: string): ProviderAdapter {
   return {
-    name,
     async isAvailable() {
-      return { cli: true, api: false };
+      return { api: false, cli: true };
     },
+    name,
     async run(): Promise<RunResult> {
       await new Promise((r) => setTimeout(r, DELAY_MS));
       return {
-        output: "",
         duration_ms: DELAY_MS,
-        via: "cli",
         error: `${name} failed intentionally`,
+        output: "",
+        via: "cli",
       };
     },
   };
@@ -88,9 +88,11 @@ function makeLogger(): Logger {
   return new Logger(`test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 }
 
-function readLogEvents(logger: Logger): Array<Record<string, unknown>> {
+function readLogEvents(logger: Logger): Record<string, unknown>[] {
   const path = logger.logFile;
-  if (!existsSync(path)) return [];
+  if (!existsSync(path)) {
+    return [];
+  }
   const lines = readFileSync(path, "utf8").trim().split("\n").filter(Boolean);
   return lines.map((l) => JSON.parse(l) as Record<string, unknown>);
 }
@@ -111,22 +113,24 @@ describe("Orchestrator integration", () => {
       const logger = makeLogger();
       const memory = new InMemoryClient();
 
-      const wallStart = Date.now();
+      const _wallStart = Date.now();
       await runOrchestrator({
-        task: "test task",
         assignments: buildAssignments("test task"),
-        providers,
-        memory,
         logger,
+        memory,
+        providers,
+        task: "test task",
       });
-      const wallEnd = Date.now();
+      const _wallEnd = Date.now();
 
       const events = readLogEvents(logger);
-      const startEvents = events.filter((e) => e["event"] === "provider.start" && !String(e["provider"] ?? "").includes("phase2"));
+      const startEvents = events.filter(
+        (e) => e.event === "provider.start" && !String(e.provider ?? "").includes("phase2"),
+      );
 
       expect(startEvents.length).toBeGreaterThanOrEqual(3);
 
-      const timestamps = startEvents.map((e) => e["timestamp_ms"] as number);
+      const timestamps = startEvents.map((e) => e.timestamp_ms as number);
       const minTs = Math.min(...timestamps);
       const maxTs = Math.max(...timestamps);
       // All three starts within 50ms of each other
@@ -146,11 +150,11 @@ describe("Orchestrator integration", () => {
 
       const wallStart = Date.now();
       await runOrchestrator({
-        task: "test task",
         assignments: buildAssignments("test task"),
-        providers,
-        memory,
         logger,
+        memory,
+        providers,
+        task: "test task",
       });
       const wallMs = Date.now() - wallStart;
 
@@ -173,11 +177,11 @@ describe("Orchestrator integration", () => {
       const memory = new InMemoryClient();
 
       const result = await runOrchestrator({
-        task: "write README",
         assignments: buildAssignments("write README"),
-        providers,
-        memory,
         logger,
+        memory,
+        providers,
+        task: "write README",
       });
 
       const allSections = result.summary ? [result.summary, ...result.sections] : result.sections;
@@ -201,22 +205,22 @@ describe("Orchestrator integration", () => {
       const memory = new InMemoryClient();
 
       await runOrchestrator({
-        task: "test",
         assignments: buildAssignments("test"),
-        providers,
-        memory,
         logger,
+        memory,
+        providers,
+        task: "test",
       });
 
       const events = readLogEvents(logger);
       const writeEvents = events.filter(
-        (e) => e["event"] === "memory.write" && String(e["key"] ?? "").includes(":draft")
+        (e) => e.event === "memory.write" && String(e.key ?? "").includes(":draft"),
       );
 
       // Exactly one draft write per agent
       const byAgent = new Map<string, number>();
       for (const ev of writeEvents) {
-        const agent = ev["agent"] as string;
+        const agent = ev.agent as string;
         byAgent.set(agent, (byAgent.get(agent) ?? 0) + 1);
       }
 
@@ -238,25 +242,24 @@ describe("Orchestrator integration", () => {
       const memory = new InMemoryClient();
 
       await runOrchestrator({
-        task: "test",
         assignments: buildAssignments("test"),
-        providers,
-        memory,
         logger,
+        memory,
+        providers,
+        task: "test",
       });
 
       const events = readLogEvents(logger);
-      const readEvents = events.filter((e) => e["event"] === "memory.read");
-      const writeEvents = events.filter((e) => e["event"] === "memory.write");
+      const readEvents = events.filter((e) => e.event === "memory.read");
+      const writeEvents = events.filter((e) => e.event === "memory.write");
 
       // Find at least one read where the key was written by a different agent
       const crossAgentRead = readEvents.some((readEv) => {
-        const readKey = readEv["key"] as string;
-        const readAgent = readEv["agent"] as string;
+        const readKey = readEv.key as string;
+        const readAgent = readEv.agent as string;
         return writeEvents.some(
           (writeEv) =>
-            (writeEv["key"] as string) === readKey &&
-            (writeEv["agent"] as string) !== readAgent
+            (writeEv.key as string) === readKey && (writeEv.agent as string) !== readAgent,
         );
       });
 
@@ -276,24 +279,24 @@ describe("Orchestrator integration", () => {
       const memory = new InMemoryClient();
 
       await runOrchestrator({
-        task: "test",
         assignments: buildAssignments("test"),
-        providers,
-        memory,
         logger,
+        memory,
+        providers,
+        task: "test",
       });
 
       const events = readLogEvents(logger);
 
       // Each event has timestamp_ms
       for (const ev of events) {
-        expect(typeof ev["timestamp_ms"]).toBe("number");
+        expect(typeof ev.timestamp_ms).toBe("number");
       }
 
       // provider.start events for phase 1
       const startProviders = events
-        .filter((e) => e["event"] === "provider.start" && !String(e["provider"] ?? "").includes("phase2"))
-        .map((e) => e["provider"]);
+        .filter((e) => e.event === "provider.start" && !String(e.provider ?? "").includes("phase2"))
+        .map((e) => e.provider);
 
       expect(startProviders).toContain("gemini");
       expect(startProviders).toContain("codex");
@@ -305,7 +308,7 @@ describe("Orchestrator integration", () => {
     it("one failing adapter does not prevent others from producing output", async () => {
       const providers = new Map<string, ProviderAdapter>([
         ["gemini", makeMockAdapter("gemini")],
-        ["codex", makeFailingAdapter("codex")],  // codex fails
+        ["codex", makeFailingAdapter("codex")], // codex fails
         ["ollama", makeMockAdapter("ollama")],
       ]);
 
@@ -313,11 +316,11 @@ describe("Orchestrator integration", () => {
       const memory = new InMemoryClient();
 
       const result = await runOrchestrator({
-        task: "test",
         assignments: buildAssignments("test"),
-        providers,
-        memory,
         logger,
+        memory,
+        providers,
+        task: "test",
       });
 
       // gemini and ollama should have produced sections
@@ -341,11 +344,11 @@ describe("Orchestrator integration", () => {
 
       // Must not throw
       const result = await runOrchestrator({
-        task: "test",
         assignments: buildAssignments("test"),
-        providers,
-        memory,
         logger,
+        memory,
+        providers,
+        task: "test",
       });
 
       expect(result.sections.length).toBeGreaterThanOrEqual(1);

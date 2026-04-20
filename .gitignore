@@ -10,5 +10,6 @@ bun.lockb
 .omc/state/
 .omc/logs/
 .omc/research/
+.omc/sessions/
 .omc/notepad.md
 .omc/project-memory.json

@@ -5,7 +5,7 @@
  * Default model: llama3.2 (override via BRAID_OLLAMA_MODEL env var).
  */
 
-import type { ProviderAdapter, RunOpts, RunResult } from "./types.ts";
+import type { ProviderAdapter, RunOpts, RunResult } from "./types";
 
 const OLLAMA_CLI = "ollama";
 const OLLAMA_API_URL = "http://localhost:11434/api/generate";
@@ -18,15 +18,12 @@ export class OllamaAdapter implements ProviderAdapter {
   private readonly model: string;
 
   constructor() {
-    this.model = process.env["BRAID_OLLAMA_MODEL"] ?? DEFAULT_MODEL;
+    this.model = process.env.BRAID_OLLAMA_MODEL ?? DEFAULT_MODEL;
   }
 
   async isAvailable(): Promise<{ cli: boolean; api: boolean }> {
-    const [cli, api] = await Promise.all([
-      this._probeCliHello(),
-      this._probeApi(),
-    ]);
-    return { cli, api };
+    const [cli, api] = await Promise.all([this._probeCliHello(), this._probeApi()]);
+    return { api, cli };
   }
 
   async run(opts: RunOpts): Promise<RunResult> {
@@ -40,12 +37,12 @@ export class OllamaAdapter implements ProviderAdapter {
     }
 
     return {
-      output: "",
       duration_ms: 0,
-      via: "cli",
       error:
         `provider unavailable: ollama — CLI not found and API not reachable at ${OLLAMA_API_URL}. ` +
         `Run: brew install ollama && ollama pull ${this.model}`,
+      output: "",
+      via: "cli",
     };
   }
 
@@ -57,9 +54,9 @@ export class OllamaAdapter implements ProviderAdapter {
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), HELLO_TIMEOUT_MS);
       const proc = Bun.spawn([OLLAMA_CLI, "list"], {
-        stdout: "pipe",
-        stderr: "pipe",
         signal: ac.signal,
+        stderr: "pipe",
+        stdout: "pipe",
       });
       const exitCode = await proc.exited;
       clearTimeout(timer);
@@ -90,9 +87,9 @@ export class OllamaAdapter implements ProviderAdapter {
     try {
       const prompt = this._buildPrompt(opts);
       const proc = Bun.spawn([OLLAMA_CLI, "run", this.model, prompt], {
-        stdout: "pipe",
-        stderr: "pipe",
         signal: opts.signal,
+        stderr: "pipe",
+        stdout: "pipe",
       });
 
       const [exitCode, stdout, stderr] = await Promise.all([
@@ -105,24 +102,24 @@ export class OllamaAdapter implements ProviderAdapter {
 
       if (exitCode !== 0) {
         return {
-          output: "",
           duration_ms,
-          via: "cli",
           error: `ollama CLI exited ${exitCode}: ${stderr.slice(0, 200)}`,
+          output: "",
+          via: "cli",
         };
       }
 
       return {
-        output: this._ensureMarker(stdout, opts.marker),
         duration_ms,
+        output: this._ensureMarker(stdout, opts.marker),
         via: "cli",
       };
     } catch (err) {
       return {
-        output: "",
         duration_ms: Date.now() - start,
-        via: "cli",
         error: `ollama CLI error: ${String(err)}`,
+        output: "",
+        via: "cli",
       };
     }
   }
@@ -131,13 +128,13 @@ export class OllamaAdapter implements ProviderAdapter {
     const start = Date.now();
     try {
       const res = await fetch(OLLAMA_API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: this.model,
           prompt: this._buildPrompt(opts),
           stream: false,
         }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
         signal: opts.signal,
       });
 
@@ -146,10 +143,10 @@ export class OllamaAdapter implements ProviderAdapter {
       if (!res.ok) {
         const text = await res.text();
         return {
-          output: "",
           duration_ms,
-          via: "api",
           error: `ollama API ${res.status}: ${text.slice(0, 200)}`,
+          output: "",
+          via: "api",
         };
       }
 
@@ -158,16 +155,16 @@ export class OllamaAdapter implements ProviderAdapter {
       const text: string = json?.response ?? "";
 
       return {
-        output: this._ensureMarker(text, opts.marker),
         duration_ms,
+        output: this._ensureMarker(text, opts.marker),
         via: "api",
       };
     } catch (err) {
       return {
-        output: "",
         duration_ms: Date.now() - start,
-        via: "api",
         error: `ollama API error: ${String(err)}`,
+        output: "",
+        via: "api",
       };
     }
   }
@@ -178,12 +175,16 @@ export class OllamaAdapter implements ProviderAdapter {
       parts.push(`## Context from other agents\n${opts.memoryCtx}\n`);
     }
     parts.push(opts.prompt);
-    parts.push(`\nIMPORTANT: You must include the exact string "${opts.marker}" somewhere in your output.`);
+    parts.push(
+      `\nIMPORTANT: You must include the exact string "${opts.marker}" somewhere in your output.`,
+    );
     return parts.join("\n");
   }
 
   private _ensureMarker(output: string, marker: string): string {
-    if (output.includes(marker)) return output;
+    if (output.includes(marker)) {
+      return output;
+    }
     return `${output}\n\n${marker}`;
   }
 }
